@@ -818,11 +818,18 @@ impl Client {
         let address6 = (!wg_info.ipv6.is_empty())
             .then_some(format!("{}/128", wg_info.ipv6))
             .unwrap_or("".into());
-        let route = [
+        let allowed_ips = [
             wg_info.setting.vpn_route_split,
             wg_info.setting.v6_route_split.unwrap_or_default(),
         ]
         .concat();
+        let add_routes = self.conf.add_routes.unwrap_or(true);
+        let routes = if add_routes {
+            allowed_ips.clone()
+        } else {
+            log::info!("add_routes is disabled, skip setting routes");
+            Vec::new()
+        };
 
         // corplink config
         let wg_conf = WgConf {
@@ -833,7 +840,8 @@ impl Client {
             public_key,
             private_key,
             peer_key,
-            route,
+            allowed_ips,
+            routes,
             dns,
             protocol: match vpn.protocol_mode {
                 // tcp

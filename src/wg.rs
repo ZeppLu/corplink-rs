@@ -75,11 +75,11 @@ impl UAPIClient {
         buff.push_str("replace_allowed_ips=true\n".to_string().as_str());
         buff.push_str(format!("endpoint={}\n", conf.peer_address).as_str());
         buff.push_str("persistent_keepalive_interval=10\n".to_string().as_str());
-        for route in &conf.route {
-            if route.contains("/") {
-                buff.push_str(format!("allowed_ip={route}\n").as_str());
+        for allowed_ip in &conf.allowed_ips {
+            if allowed_ip.contains("/") {
+                buff.push_str(format!("allowed_ip={allowed_ip}\n").as_str());
             } else {
-                buff.push_str(format!("allowed_ip={route}/32\n").as_str());
+                buff.push_str(format!("allowed_ip={allowed_ip}/32\n").as_str());
             }
         }
 
@@ -93,7 +93,7 @@ impl UAPIClient {
         }
         buff.push_str(format!("mtu={mtu}\n").as_str());
         buff.push_str("up=true\n".to_string().as_str());
-        for route in &conf.route {
+        for route in &conf.routes {
             if route.contains("/") {
                 buff.push_str(format!("route={route}\n").as_str());
             } else {
