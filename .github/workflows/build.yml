@@ -1,0 +1,176 @@
+name: build
+
+on:
+  workflow_dispatch:
+    inputs:
+      linux:
+        description: 'Build for Linux'
+        type: boolean
+        default: true
+      macos:
+        description: 'Build for macOS'
+        type: boolean
+        default: true
+      windows:
+        description: 'Build for Windows'
+        type: boolean
+        default: true
+      x86_64:
+        description: 'Build for x86_64 (amd64)'
+        type: boolean
+        default: true
+      aarch64:
+        description: 'Build for aarch64 (arm64)'
+        type: boolean
+        default: true
+
+jobs:
+  setup:
+    name: Setup build matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      has_targets: ${{ steps.set-matrix.outputs.has_targets }}
+    steps:
+      - id: set-matrix
+        run: |
+          declare -a entries
+
+          if [[ "${{ inputs.linux }}" == "true" && "${{ inputs.x86_64 }}" == "true" ]]; then
+            entries+=('{"target_os":"linux","arch":"x86_64","runner":"ubuntu-latest","rust_target":"x86_64-unknown-linux-gnu","goarch":"amd64"}')
+          fi
+          if [[ "${{ inputs.linux }}" == "true" && "${{ inputs.aarch64 }}" == "true" ]]; then
+            entries+=('{"target_os":"linux","arch":"aarch64","runner":"ubuntu-latest","rust_target":"aarch64-unknown-linux-gnu","goarch":"arm64","cross_cc":"aarch64-linux-gnu-gcc","cross_pkg":"gcc-aarch64-linux-gnu"}')
+          fi
+          if [[ "${{ inputs.macos }}" == "true" && "${{ inputs.x86_64 }}" == "true" ]]; then
+            entries+=('{"target_os":"macos","arch":"x86_64","runner":"macos-13","rust_target":"x86_64-apple-darwin","goarch":"amd64"}')
+          fi
+          if [[ "${{ inputs.macos }}" == "true" && "${{ inputs.aarch64 }}" == "true" ]]; then
+            entries+=('{"target_os":"macos","arch":"aarch64","runner":"macos-latest","rust_target":"aarch64-apple-darwin","goarch":"arm64"}')
+          fi
+          if [[ "${{ inputs.windows }}" == "true" && "${{ inputs.x86_64 }}" == "true" ]]; then
+            entries+=('{"target_os":"windows","arch":"x86_64","runner":"windows-latest","rust_target":"x86_64-pc-windows-gnu","goarch":"amd64"}')
+          fi
+          if [[ "${{ inputs.windows }}" == "true" && "${{ inputs.aarch64 }}" == "true" ]]; then
+            entries+=('{"target_os":"windows","arch":"aarch64","runner":"windows-latest","rust_target":"aarch64-pc-windows-gnullvm","goarch":"arm64"}')
+          fi
+
+          if [[ ${#entries[@]} -eq 0 ]]; then
+            echo "has_targets=false" >> "$GITHUB_OUTPUT"
+            echo 'matrix={"include":[]}' >> "$GITHUB_OUTPUT"
+          else
+            echo "has_targets=true" >> "$GITHUB_OUTPUT"
+            matrix='{"include":['
+            for i in "${!entries[@]}"; do
+              [[ $i -gt 0 ]] && matrix+=","
+              matrix+="${entries[$i]}"
+            done
+            matrix+=']}'
+            echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    name: Build ${{ matrix.target_os }}-${{ matrix.arch }}
+    needs: setup
+    if: needs.setup.outputs.has_targets == 'true'
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install cross-compilation tools (Linux aarch64)
+        if: matrix.target_os == 'linux' && matrix.arch == 'aarch64'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Install llvm-mingw (Windows aarch64)
+        if: matrix.target_os == 'windows' && matrix.arch == 'aarch64'
+        shell: pwsh
+        run: |
+          $version = "20250114"
+          $url = "https://github.com/mstorsjo/llvm-mingw/releases/download/$version/llvm-mingw-$version-ucrt-x86_64.zip"
+          Invoke-WebRequest -Uri $url -OutFile "llvm-mingw.zip"
+          Expand-Archive -Path "llvm-mingw.zip" -DestinationPath "C:\llvm-mingw"
+          "C:\llvm-mingw\llvm-mingw-$version-ucrt-x86_64\bin" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '>=1.22.0'
+
+      - name: Build libwg (Unix)
+        if: matrix.target_os != 'windows'
+        run: |
+          if [ -n "$CROSS_CC" ]; then
+            export CC="$CROSS_CC"
+            export CGO_ENABLED=1
+          fi
+          cd libwg && ./build.sh
+        env:
+          GOARCH: ${{ matrix.goarch }}
+          CROSS_CC: ${{ matrix.cross_cc }}
+
+      - name: Build libwg (Windows)
+        if: matrix.target_os == 'windows'
+        run: cd libwg && ./build.ps1
+        env:
+          GOARCH: ${{ matrix.goarch }}
+          CC: ${{ matrix.arch == 'aarch64' && 'aarch64-w64-mingw32-gcc' || '' }}
+          CGO_ENABLED: ${{ matrix.arch == 'aarch64' && '1' || '' }}
+
+      - name: Setup Rust toolchain (Windows)
+        if: matrix.target_os == 'windows'
+        run: |
+          rustup toolchain install stable-gnu
+          rustup default stable-x86_64-pc-windows-gnu
+          rustup target add ${{ matrix.rust_target }}
+
+      - name: Setup Rust target (Unix)
+        if: matrix.target_os != 'windows'
+        run: rustup target add ${{ matrix.rust_target }}
+
+      - name: Configure cross-compilation linker (Linux aarch64)
+        if: matrix.target_os == 'linux' && matrix.arch == 'aarch64'
+        run: |
+          mkdir -p .cargo
+          echo '[target.aarch64-unknown-linux-gnu]' > .cargo/config.toml
+          echo 'linker = "aarch64-linux-gnu-gcc"' >> .cargo/config.toml
+
+      - name: Configure cross-compilation linker (Windows aarch64)
+        if: matrix.target_os == 'windows' && matrix.arch == 'aarch64'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path .cargo
+          @("[target.aarch64-pc-windows-gnullvm]", 'linker = "aarch64-w64-mingw32-gcc"') | Set-Content -Path .cargo\config.toml
+
+      - name: Build release
+        run: cargo build --release --target ${{ matrix.rust_target }}
+
+      - name: Package (Unix)
+        if: matrix.target_os != 'windows'
+        run: |
+          cp target/${{ matrix.rust_target }}/release/corplink-rs .
+          cp config/config.json .
+          tar -czf corplink-rs-${{ matrix.target_os }}-${{ matrix.arch }}.tar.gz corplink-rs config.json
+
+      - name: Package (Windows)
+        if: matrix.target_os == 'windows'
+        shell: pwsh
+        run: |
+          Copy-Item "target/${{ matrix.rust_target }}/release/corplink-rs.exe" -Destination "."
+          Copy-Item "config/config.json" -Destination "."
+          Compress-Archive -Path corplink-rs.exe,config.json -Destination "corplink-rs-${{ matrix.target_os }}-${{ matrix.arch }}.zip"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: corplink-rs-${{ matrix.target_os }}-${{ matrix.arch }}
+          path: |
+            corplink-rs-${{ matrix.target_os }}-${{ matrix.arch }}.tar.gz
+            corplink-rs-${{ matrix.target_os }}-${{ matrix.arch }}.zip
