@@ -28,6 +28,7 @@ jobs:
   setup:
     name: Setup build matrix
     runs-on: ubuntu-latest
+    permissions: {}
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
       has_targets: ${{ steps.set-matrix.outputs.has_targets }}
@@ -74,6 +75,8 @@ jobs:
     needs: setup
     if: needs.setup.outputs.has_targets == 'true'
     runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
@@ -124,12 +127,15 @@ jobs:
           CC: ${{ matrix.arch == 'aarch64' && 'aarch64-w64-mingw32-gcc' || '' }}
           CGO_ENABLED: ${{ matrix.arch == 'aarch64' && '1' || '' }}
 
-      - name: Setup Rust toolchain (Windows)
-        if: matrix.target_os == 'windows'
+      - name: Setup Rust toolchain (Windows x86_64)
+        if: matrix.target_os == 'windows' && matrix.arch == 'x86_64'
         run: |
           rustup toolchain install stable-gnu
           rustup default stable-x86_64-pc-windows-gnu
-          rustup target add ${{ matrix.rust_target }}
+
+      - name: Setup Rust target (Windows aarch64)
+        if: matrix.target_os == 'windows' && matrix.arch == 'aarch64'
+        run: rustup target add ${{ matrix.rust_target }}
 
       - name: Setup Rust target (Unix)
         if: matrix.target_os != 'windows'
@@ -167,10 +173,16 @@ jobs:
           Copy-Item "config/config.json" -Destination "."
           Compress-Archive -Path corplink-rs.exe,config.json -Destination "corplink-rs-${{ matrix.target_os }}-${{ matrix.arch }}.zip"
 
-      - name: Upload artifact
+      - name: Upload artifact (Unix)
+        if: matrix.target_os != 'windows'
         uses: actions/upload-artifact@v4
         with:
           name: corplink-rs-${{ matrix.target_os }}-${{ matrix.arch }}
-          path: |
-            corplink-rs-${{ matrix.target_os }}-${{ matrix.arch }}.tar.gz
-            corplink-rs-${{ matrix.target_os }}-${{ matrix.arch }}.zip
+          path: corplink-rs-${{ matrix.target_os }}-${{ matrix.arch }}.tar.gz
+
+      - name: Upload artifact (Windows)
+        if: matrix.target_os == 'windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: corplink-rs-${{ matrix.target_os }}-${{ matrix.arch }}
+          path: corplink-rs-${{ matrix.target_os }}-${{ matrix.arch }}.zip
