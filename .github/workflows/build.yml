@@ -41,7 +41,7 @@ jobs:
             entries+=('{"target_os":"linux","arch":"x86_64","runner":"ubuntu-latest","rust_target":"x86_64-unknown-linux-gnu","goarch":"amd64"}')
           fi
           if [[ "${{ inputs.linux }}" == "true" && "${{ inputs.aarch64 }}" == "true" ]]; then
-            entries+=('{"target_os":"linux","arch":"aarch64","runner":"ubuntu-latest","rust_target":"aarch64-unknown-linux-gnu","goarch":"arm64","cross_cc":"aarch64-linux-gnu-gcc","cross_pkg":"gcc-aarch64-linux-gnu"}')
+            entries+=('{"target_os":"linux","arch":"aarch64","runner":"ubuntu-latest","rust_target":"aarch64-unknown-linux-gnu","goarch":"arm64","cross_cc":"aarch64-linux-gnu-gcc"}')
           fi
           if [[ "${{ inputs.macos }}" == "true" && "${{ inputs.x86_64 }}" == "true" ]]; then
             entries+=('{"target_os":"macos","arch":"x86_64","runner":"macos-13","rust_target":"x86_64-apple-darwin","goarch":"amd64"}')
@@ -133,12 +133,8 @@ jobs:
           rustup toolchain install stable-gnu
           rustup default stable-x86_64-pc-windows-gnu
 
-      - name: Setup Rust target (Windows aarch64)
-        if: matrix.target_os == 'windows' && matrix.arch == 'aarch64'
-        run: rustup target add ${{ matrix.rust_target }}
-
-      - name: Setup Rust target (Unix)
-        if: matrix.target_os != 'windows'
+      - name: Setup Rust target
+        if: matrix.target_os != 'windows' || matrix.arch == 'aarch64'
         run: rustup target add ${{ matrix.rust_target }}
 
       - name: Configure cross-compilation linker (Linux aarch64)
@@ -171,7 +167,7 @@ jobs:
         run: |
           Copy-Item "target/${{ matrix.rust_target }}/release/corplink-rs.exe" -Destination "."
           Copy-Item "config/config.json" -Destination "."
-          Compress-Archive -Path corplink-rs.exe,config.json -Destination "corplink-rs-${{ matrix.target_os }}-${{ matrix.arch }}.zip"
+          Compress-Archive -Path corplink-rs.exe,config.json -DestinationPath "corplink-rs-${{ matrix.target_os }}-${{ matrix.arch }}.zip"
 
       - name: Upload artifact (Unix)
         if: matrix.target_os != 'windows'
