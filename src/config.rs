@@ -47,6 +47,7 @@ pub struct Config {
     pub vpn_server_name: Option<String>,
     pub vpn_select_strategy: Option<String>,
     pub use_vpn_dns: Option<bool>,
+    pub auto_setup_routes: Option<bool>,
 }
 
 impl fmt::Display for Config {
@@ -133,7 +134,8 @@ pub struct WgConf {
     pub public_key: String,
     pub private_key: String,
     pub peer_key: String,
-    pub route: Vec<String>,
+    pub allowed_ips: Vec<String>,
+    pub routes: Vec<String>,
 
     // extra confs
     pub dns: String,
