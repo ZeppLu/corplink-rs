@@ -126,8 +126,9 @@ RUST_LOG=debug ./corplink-rs config.json
   // use vpn dns for macos
   // NOTE: if process doesn't exit gracefully, your dns may not be restored
   "use_vpn_dns": false,
-  // whether to add routes from server into OS routing table, default is true
-  "add_routes": true
+  // automatically setup system routes (default: true)
+  // set to false if you want to manually configure routes
+  "auto_setup_routes": true
 }
 ```
 
