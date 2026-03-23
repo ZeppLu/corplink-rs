@@ -47,7 +47,7 @@ pub struct Config {
     pub vpn_server_name: Option<String>,
     pub vpn_select_strategy: Option<String>,
     pub use_vpn_dns: Option<bool>,
-    pub add_routes: Option<bool>,
+    pub auto_setup_routes: Option<bool>,
 }
 
 impl fmt::Display for Config {

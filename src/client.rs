@@ -823,11 +823,11 @@ impl Client {
             wg_info.setting.v6_route_split.unwrap_or_default(),
         ]
         .concat();
-        let add_routes = self.conf.add_routes.unwrap_or(true);
-        let routes = if add_routes {
+        let auto_setup_routes = self.conf.auto_setup_routes.unwrap_or(true);
+        let routes = if auto_setup_routes {
             allowed_ips.clone()
         } else {
-            log::info!("add_routes is disabled, skip setting routes");
+            log::info!("auto_setup_routes is disabled, skip setting routes");
             Vec::new()
         };
 
