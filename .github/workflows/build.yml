@@ -109,9 +109,8 @@ jobs:
 
       - name: Test submodule tags
         run: |
-          ls libwg
-          ls libwg/wireguard-go
-          git -C libwg/wireguard-go tag --list
+          git -C libwg/wireguard-go tag --list | wc
+          git -C libwg/wireguard-go tag --list | cat
 
       - name: Build libwg (Unix)
         if: matrix.target_os != 'windows'
